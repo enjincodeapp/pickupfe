@@ -44,7 +44,7 @@ export default function FavoritesScreen() {
 
       {favListings.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>💛</Text>
+          {/* <Text style={styles.emptyEmoji}>💛</Text> */}
           <Text style={styles.emptyTitle}>No favorites yet</Text>
           <Text style={styles.emptySub}>Tap the heart on any item to save it here</Text>
           <TouchableOpacity style={styles.browseBtn} onPress={() => router.replace('/(tabs)')}>

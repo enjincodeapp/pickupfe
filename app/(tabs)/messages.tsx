@@ -56,7 +56,7 @@ export default function MessagesTabScreen() {
 
       {conversations.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyEmoji}>💬</Text>
+          {/* <Text style={styles.emptyEmoji}>💬</Text> */}
           <Text style={styles.emptyTitle}>No messages yet</Text>
           <Text style={styles.emptySub}>
             Message neighbors about free items to arrange pickup and chat!

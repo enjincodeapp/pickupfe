@@ -58,7 +58,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           user = await api.getUser();
           await AsyncStorage.setItem('@pickit_current_user', JSON.stringify(user));
-          await Purchases.logIn(user.id);
+          await Purchases.logIn(String(user.id));
         } catch (err) {
           await api.clearToken();
         }
@@ -101,7 +101,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (result && result.user) {
         setCurrentUser(result.user);
         await AsyncStorage.setItem('@pickit_current_user', JSON.stringify(result.user));
-        await Purchases.logIn(result.user.id);
+        await Purchases.logIn(String(result.user.id));
         await refreshData();
         return { success: true };
       }
@@ -117,7 +117,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (result && result.user) {
         setCurrentUser(result.user);
         await AsyncStorage.setItem('@pickit_current_user', JSON.stringify(result.user));
-        await Purchases.logIn(result.user.id);
+        await Purchases.logIn(String(result.user.id));
         await refreshData();
         return { success: true };
       }

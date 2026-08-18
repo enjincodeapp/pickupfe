@@ -180,6 +180,26 @@ class ApiService {
   }
 
   /**
+   * Ask the backend to verify a just-completed purchase directly against
+   * RevenueCat and persist the verified subscription state.
+   */
+  async verifySubscription(params: {
+    product_id?: string;
+    transaction_id?: string;
+  }): Promise<{
+    verified: boolean;
+    is_premium: boolean;
+    plan?: string | null;
+    expires_at?: string | null;
+    message?: string;
+  }> {
+    return await this.request('/subscription/verify', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  }
+
+  /**
    * Toggle premium status (dev/testing only).
    */
   async togglePremium(): Promise<{
