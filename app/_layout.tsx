@@ -13,6 +13,9 @@ export default function RootLayout() {
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="sign-up" />
           <Stack.Screen name="onboarding" />
+          <Stack.Screen name="onboarding-neighborhood" />
+          <Stack.Screen name="onboarding-testimonials" />
+          <Stack.Screen name="onboarding-notifications" />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="item-detail" />
           <Stack.Screen name="post-item" />

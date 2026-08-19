@@ -363,6 +363,25 @@ class DatabaseService {
     await AsyncStorage.removeItem(KEYS.CURRENT_USER);
   }
 
+  async updateLocation(latitude: number, longitude: number, neighborhood: string): Promise<User | null> {
+    await this.initDatabase();
+    const currentUser = await this.getCurrentUser();
+    if (!currentUser) return null;
+
+    const updatedUser: User = { ...currentUser, latitude, longitude, neighborhood };
+    await AsyncStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(updatedUser));
+
+    const usersData = await AsyncStorage.getItem(KEYS.USERS);
+    const users: User[] = usersData ? JSON.parse(usersData) : [];
+    const idx = users.findIndex((u) => u.id === currentUser.id);
+    if (idx >= 0) {
+      users[idx] = updatedUser;
+      await AsyncStorage.setItem(KEYS.USERS, JSON.stringify(users));
+    }
+
+    return updatedUser;
+  }
+
   // --- CATEGORIES ---
   async getCategories(): Promise<Category[]> {
     await this.initDatabase();

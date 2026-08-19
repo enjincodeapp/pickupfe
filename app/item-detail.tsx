@@ -17,7 +17,7 @@ import { db } from '../services/database';
 
 export default function ItemDetailScreen() {
   const { id, title } = useLocalSearchParams<{ id: string; title: string }>();
-  const { listings, categories, isFavorite, toggleFavorite, getImagesForListing } = useApp();
+  const { listings, categories, isFavorite, toggleFavorite, getImagesForListing, currentUser } = useApp();
   const { isPremium, showPaywall } = useSubscription();
   const [claiming, setClaiming] = useState(false);
 
@@ -114,7 +114,7 @@ export default function ItemDetailScreen() {
 
           <View style={styles.metaRow}>
             <Ionicons name="location" size={14} color="#FF2424" />
-            <Text style={styles.metaText}>0.4 mi · Paddington, W2</Text>
+            <Text style={styles.metaText}>0.4 mi · {currentUser?.neighborhood || 'Paddington, W2'}</Text>
             <Text style={styles.dot}>·</Text>
             <Text style={styles.metaText}>Status: {listing.status}</Text>
           </View>

@@ -12,7 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../../context/AppContext';
 
 export default function FavoritesScreen() {
-  const { listings, favorites, toggleFavorite, getImagesForListing } = useApp();
+  const { listings, favorites, toggleFavorite, getImagesForListing, currentUser } = useApp();
+
+  const userNeighborhood = currentUser?.neighborhood || 'Paddington, W2';
 
   const favListings = listings.filter((l) =>
     favorites.some((f) => f.listing_id === l.id)
@@ -75,7 +77,7 @@ export default function FavoritesScreen() {
                 </View>
                 <View style={styles.details}>
                   <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-                  <Text style={styles.itemMeta}>0.4 mi · Paddington</Text>
+                  <Text style={styles.itemMeta}>0.4 mi · {userNeighborhood.split(',')[0]}</Text>
                 </View>
               </TouchableOpacity>
             ))}

@@ -26,7 +26,7 @@ const PRESET_SAMPLE_PHOTOS = [
 ];
 
 export default function PostItemScreen() {
-  const { categories, createListing } = useApp();
+  const { categories, createListing, currentUser } = useApp();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState('1'); // Default: Furniture
@@ -69,8 +69,8 @@ export default function PostItemScreen() {
       Alert.alert('Photo Required', 'Please upload at least one existing photo of your item.');
       return;
     }
-    if (images.length > 3) {
-      Alert.alert('Photo Limit', 'Maximum 3 photos allowed.');
+    if (images.length > 2) {
+      Alert.alert('Photo Limit', 'Maximum 2 photos allowed.');
       return;
     }
     if (!title.trim()) {
@@ -214,7 +214,7 @@ export default function PostItemScreen() {
         <Text style={styles.label}>Pick-up Location</Text>
         <View style={styles.locationRow}>
           <Ionicons name="location-outline" size={18} color="#FF2424" />
-          <Text style={styles.locationText}>Paddington, W2 (Your Neighborhood)</Text>
+          <Text style={styles.locationText}>{currentUser?.neighborhood || 'Paddington, W2'} (Your Neighborhood)</Text>
         </View>
 
         <View style={styles.spacer} />

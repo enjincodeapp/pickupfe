@@ -94,12 +94,12 @@ export default function SettingsScreen() {
         {/* Subscription Info */}
         <View style={styles.subCard}>
           <View style={styles.subHeader}>
-            <Ionicons name="sparkles" size={20} color="#F59E0B" />
-            <Text style={styles.subTitle}>Subscription Plan</Text>
+            {/* <Ionicons name="sparkles" size={20} color="#f5b30b" /> */}
+            {/* <Text style={styles.subTitle}>Subscription Plan</Text> */}
           </View>
-          <Text style={styles.subPlan}>{isPremium ? 'Pickup Premium' : 'Free Community Member'}</Text>
+          <Text style={styles.subPlan}>{isPremium ? 'Premium Plan' : 'Free Plan'}</Text>
           <Text style={styles.subStatus}>
-            {isPremium ? 'Active · Full-visibility listing photos' : 'Active · Listing photos are blurred'}
+            {isPremium ? 'Active' : 'Active'}
           </Text>
         </View>
 

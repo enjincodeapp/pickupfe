@@ -31,6 +31,9 @@ export default function OnboardingScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: '25%' }]} />
+        </View>
         <Image
           source={require('../assets/images/logo.png')}
           style={styles.logo}
@@ -39,7 +42,7 @@ export default function OnboardingScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.title}>What brings you to Pickly?</Text>
+        <Text style={styles.title}>What brings you to Pickup?</Text>
 
         <Text style={styles.subtitle}>
           We'll personalise your experience
@@ -140,7 +143,7 @@ export default function OnboardingScreen() {
           ]}
           onPress={() => {
             if (selected) {
-              router.replace('/(tabs)');
+              router.push('/onboarding-neighborhood');
             }
           }}
           activeOpacity={0.85}
@@ -152,7 +155,7 @@ export default function OnboardingScreen() {
 
         {/* Skip */}
         <TouchableOpacity
-          onPress={() => router.replace('/(tabs)')}
+          onPress={() => router.push('/onboarding-neighborhood')}
         >
           <Text style={styles.skipText}>
             Skip for now
@@ -175,6 +178,21 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    gap: 12,
+  },
+
+  progressTrack: {
+    width: '100%',
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#E5E5E5',
+    overflow: 'hidden',
+  },
+
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#1C1C1E',
   },
 
   logo: {

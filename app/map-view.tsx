@@ -1,442 +1,293 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
-  ScrollView,
+  ActivityIndicator,
+  Platform,
+  Alert,
 } from 'react-native';
+import { AppleMaps, GoogleMaps } from 'expo-maps';
+import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useApp } from '../context/AppContext';
 
-const MAP_PINS = [
-  { id: '1', x: 70, y: 190, title: 'Velvet Office Chair', img: require('../assets/images/items/img_001.jpg'), distance: '0.4 mi' },
-  { id: '2', x: 230, y: 130, title: 'IKEA Bookshelf', img: require('../assets/images/items/img_002.jpg'), distance: '1.1 mi' },
-  { id: '3', x: 270, y: 280, title: 'Retro Record Player', img: require('../assets/images/items/img_003.jpg'), distance: '0.8 mi' },
-  { id: '4', x: 130, y: 340, title: 'Dining Table Set', img: require('../assets/images/items/img_004.jpg'), distance: '2.3 mi' },
-  { id: '5', x: 290, y: 180, title: 'Kids Bicycle', img: require('../assets/images/items/img_010.jpg'), distance: '0.5 mi' },
-];
+const DEFAULT_LAT = 51.516;
+const DEFAULT_LNG = -0.177;
 
 export default function MapViewScreen() {
-  const [selected, setSelected] = useState<string | null>(null);
+  const { updateLocation } = useApp();
   const insets = useSafeAreaInsets();
-  const selectedPin = MAP_PINS.find(p => p.id === selected);
+  const mapRef = useRef<any>(null);
+
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [markerCoords, setMarkerCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [address, setAddress] = useState<string>('');
+  const [confirming, setConfirming] = useState(false);
+  const [currentLoc, setCurrentLoc] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        const granted = status === 'granted';
+        setHasPermission(granted);
+
+        if (granted) {
+          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+          setCurrentLoc(coords);
+        }
+      } catch {
+        setHasPermission(false);
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, []);
+
+  const reverseGeocode = useCallback(async (lat: number, lng: number) => {
+    try {
+      const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      if (results.length > 0) {
+        const r = results[0];
+        const parts = [r.name, r.street, r.city, r.region].filter(Boolean);
+        setAddress(parts.join(', '));
+      }
+    } catch {
+      setAddress('');
+    }
+  }, []);
+
+  const handleMapPress = useCallback(
+    (event: { coordinates: { latitude?: number; longitude?: number } }) => {
+      const lat = event.coordinates.latitude;
+      const lng = event.coordinates.longitude;
+      if (lat == null || lng == null) return;
+      const coords = { latitude: lat, longitude: lng };
+      setMarkerCoords(coords);
+      reverseGeocode(coords.latitude, coords.longitude);
+    },
+    [reverseGeocode]
+  );
+
+  const handleConfirm = useCallback(async () => {
+    if (!markerCoords) return;
+    setConfirming(true);
+    try {
+      await updateLocation(markerCoords.latitude, markerCoords.longitude, address || undefined);
+      Alert.alert('Location Updated', 'Your location has been saved.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch {
+      Alert.alert('Error', 'Failed to save location. Please try again.');
+    } finally {
+      setConfirming(false);
+    }
+  }, [markerCoords, address, updateLocation]);
+
+  const handleUseMyLocation = useCallback(async () => {
+    try {
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+      setCurrentLoc(coords);
+      setMarkerCoords(coords);
+      reverseGeocode(coords.latitude, coords.longitude);
+      mapRef.current?.setCameraPosition({ coordinates: coords, zoom: 15 });
+    } catch {
+      Alert.alert('Error', 'Could not get your current location.');
+    }
+  }, [reverseGeocode]);
+
+  const requestPermission = useCallback(async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    const granted = status === 'granted';
+    setHasPermission(granted);
+    if (granted) {
+      setIsLoading(true);
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const coords = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+        setCurrentLoc(coords);
+      } catch {
+        // ignore
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  }, []);
+
+  // --- Loading state ---
+  if (isLoading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#FF2424" />
+        <Text style={styles.loadingText}>Getting your location...</Text>
+      </View>
+    );
+  }
+
+  // --- Permission denied ---
+  if (hasPermission === false) {
+    return (
+      <View style={[styles.centered, { paddingTop: insets.top + 40 }]}>
+        <Ionicons name="location-outline" size={64} color="#D1D5DB" />
+        <Text style={styles.permTitle}>Location Permission Required</Text>
+        <Text style={styles.permDesc}>
+          We need access to your location to show you a map and help you select your neighborhood.
+        </Text>
+        <TouchableOpacity style={styles.permBtn} onPress={requestPermission}>
+          <Text style={styles.permBtnText}>Grant Permission</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.backLink} onPress={() => router.back()}>
+          <Text style={styles.backLinkText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // --- Initial map position ---
+  const initialPos = currentLoc || { latitude: DEFAULT_LAT, longitude: DEFAULT_LNG };
+  const markers = markerCoords
+    ? [{ id: 'selected', coordinates: markerCoords, title: 'Selected Location' }]
+    : [];
+
+  const MapComponent = Platform.OS === 'ios' ? AppleMaps.View : GoogleMaps.View;
 
   return (
     <View style={styles.container}>
-      {/* Top Header Section */}
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.headerTop}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={22} color="#111827" />
-          </TouchableOpacity>
-          <View style={styles.searchOverlay}>
-            <Ionicons name="search" size={16} color="#9CA3AF" />
-            <Text style={styles.searchPlaceholder}>Search Paddington, W2...</Text>
-          </View>
-          <TouchableOpacity style={styles.filterBtn}>
-            <Ionicons name="options-outline" size={20} color="#111827" />
-          </TouchableOpacity>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color="#111827" />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Select Location</Text>
+          <Text style={styles.headerSub}>Tap anywhere on the map to place a pin</Text>
         </View>
-        <View style={styles.headerTitleRow}>
-          <Text style={styles.headerTitle}>Near you </Text>
-          <Text style={styles.headerSub}>5 items waiting to be picked up in your neighborhood</Text>
-        </View>
+        <View style={{ width: 40 }} />
       </View>
 
-      {/* Map Area */}
-      <View style={styles.mapArea}>
-        {/* Park: Paddington Green */}
-        <View style={[styles.park, { top: 90, left: 20, width: 140, height: 90 }]}>
-          <Text style={styles.parkLabel}>Paddington Green</Text>
+      {/* Map */}
+      <MapComponent
+        ref={mapRef}
+        style={styles.map}
+        cameraPosition={{ coordinates: initialPos, zoom: 14 }}
+        markers={markers}
+        onMapClick={handleMapPress}
+        properties={{
+          isMyLocationEnabled: true,
+        }}
+      />
+
+      {/* Crosshair */}
+      {!markerCoords && (
+        <View style={styles.crosshair} pointerEvents="none">
+          <Ionicons name="location" size={36} color="#FF2424" />
         </View>
+      )}
 
-        {/* Park: St Mary's Churchyard */}
-        <View style={[styles.park, { top: 290, left: 230, width: 120, height: 110 }]}>
-          <Text style={styles.parkLabel}>{"St Mary's Gardens"}</Text>
-        </View>
+      {/* Use My Location FAB */}
+      <TouchableOpacity style={[styles.fab, { bottom: markerCoords ? 220 : 30 }]} onPress={handleUseMyLocation}>
+        <Ionicons name="locate" size={22} color="#3B82F6" />
+      </TouchableOpacity>
 
-        {/* River Canal */}
-        <View style={styles.river} />
-        <View style={[styles.riverLabelContainer, { top: 235, left: 130, transform: [{ rotate: '-12deg' }] }]}>
-          <Text style={styles.riverLabel}>Grand Union Canal</Text>
-        </View>
-
-        {/* Intersecting Streets */}
-        {/* Harrow Road */}
-        <View style={[styles.street, { top: 120, left: 0, right: 0, height: 26 }]} />
-        <Text style={[styles.streetLabel, { top: 125, left: 50 }]}>Harrow Rd</Text>
-
-        {/* Praed Street */}
-        <View style={[styles.street, { top: 250, left: 0, right: 0, height: 26 }]} />
-        <Text style={[styles.streetLabel, { top: 255, left: 180 }]}>Praed St</Text>
-
-        {/* Craven Road */}
-        <View style={[styles.street, { top: 370, left: 0, right: 0, height: 26 }]} />
-        <Text style={[styles.streetLabel, { top: 375, left: 40 }]}>Craven Rd</Text>
-
-        {/* Bouverie Place (Vertical) */}
-        <View style={[styles.street, { left: 160, top: 0, bottom: 0, width: 26 }]} />
-        <Text style={[styles.streetLabelVertical, { left: 165, top: 150 }]}>Bouverie Pl</Text>
-
-        {/* Norfolk Place (Vertical) */}
-        <View style={[styles.street, { left: 280, top: 0, bottom: 0, width: 26 }]} />
-        <Text style={[styles.streetLabelVertical, { left: 285, top: 310 }]}>Norfolk Pl</Text>
-
-        {/* My location */}
-        <View style={styles.myLocation}>
-          <View style={styles.myLocationDot} />
-          <View style={styles.myLocationRing} />
-        </View>
-
-        {/* Map pins */}
-        {MAP_PINS.map(pin => {
-          const isSelected = selected === pin.id;
-          return (
-            <TouchableOpacity
-              key={pin.id}
-              style={[styles.pin, { left: pin.x - 20, top: pin.y - 20 }, isSelected && styles.pinActive]}
-              onPress={() => setSelected(isSelected ? null : pin.id)}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name="gift"
-                size={18}
-                color={isSelected ? '#fff' : '#FF2424'}
-              />
-            </TouchableOpacity>
-          );
-        })}
-
-        {/* Map label */}
-        <View style={styles.mapLabel}>
-          <Ionicons name="map-outline" size={13} color="#9CA3AF" style={{ marginRight: 4 }} />
-          <Text style={styles.mapLabelText}>Interactive map • Paddington W2</Text>
-        </View>
-      </View>
-
-      {/* Bottom sheet */}
-      <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
-        {selectedPin ? (
-          <TouchableOpacity
-            style={styles.selectedCard}
-            onPress={() => router.push({ pathname: '/item-detail', params: { id: selectedPin.id, title: selectedPin.title } })}
-            activeOpacity={0.9}
-          >
-            <Image source={selectedPin.img} style={styles.selectedImg} />
-            <View style={styles.selectedInfo}>
-              <View style={styles.badgeRow}>
-                <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>FREE</Text></View>
-                <Text style={styles.selectedDistance}>{selectedPin.distance} away</Text>
-              </View>
-              <Text style={styles.selectedTitle} numberOfLines={1}>{selectedPin.title}</Text>
-              <Text style={styles.selectedMeta}>Paddington · Tap for details</Text>
+      {/* Bottom Sheet */}
+      {markerCoords && (
+        <View style={[styles.bottomSheet, { paddingBottom: insets.bottom + 16 }]}>
+          <View style={styles.addressCard}>
+            <View style={styles.addressIconWrap}>
+              <Ionicons name="location" size={20} color="#FF2424" />
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            <View style={styles.addressTextWrap}>
+              <Text style={styles.addressLabel}>Selected Location</Text>
+              <Text style={styles.addressText} numberOfLines={2}>
+                {address || `${markerCoords.latitude.toFixed(5)}, ${markerCoords.longitude.toFixed(5)}`}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.confirmBtn, confirming && { opacity: 0.6 }]}
+            onPress={handleConfirm}
+            disabled={confirming}
+            activeOpacity={0.85}
+          >
+            {confirming ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.confirmBtnText}>Confirm Location</Text>
+              </>
+            )}
           </TouchableOpacity>
-        ) : (
-          <>
-            <Text style={styles.sheetTitle}>{MAP_PINS.length} items near you</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pinPreviews} contentContainerStyle={{ paddingRight: 20 }}>
-              {MAP_PINS.map(pin => (
-                <TouchableOpacity
-                  key={pin.id}
-                  style={styles.previewCard}
-                  onPress={() => setSelected(pin.id)}
-                >
-                  <Image source={pin.img} style={styles.previewImg} />
-                  <Text style={styles.previewTitle} numberOfLines={1}>{pin.title}</Text>
-                  <Text style={styles.previewDistance}>{pin.distance}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </>
-        )}
-      </View>
+
+          <TouchableOpacity style={styles.changeLink} onPress={() => { setMarkerCoords(null); setAddress(''); }}>
+            <Text style={styles.changeLinkText}>Tap map to change</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  headerContainer: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    zIndex: 10,
-  },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
+  centered: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  loadingText: { marginTop: 14, fontSize: 15, color: '#6B7280', fontWeight: '500' },
+  permTitle: { fontSize: 20, fontWeight: '700', color: '#111827', marginTop: 20, textAlign: 'center' },
+  permDesc: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 10, lineHeight: 20 },
+  permBtn: { backgroundColor: '#FF2424', borderRadius: 14, paddingHorizontal: 28, paddingVertical: 14, marginTop: 24 },
+  permBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  backLink: { marginTop: 16 },
+  backLinkText: { color: '#6B7280', fontSize: 14, fontWeight: '600' },
+  header: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
   },
   backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6',
+    alignItems: 'center', justifyContent: 'center',
   },
-  searchOverlay: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    height: 40,
-  },
-  searchPlaceholder: {
-    color: '#9CA3AF',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  filterBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleRow: {
-    marginTop: 4,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#111827',
-    lineHeight: 28,
-  },
-  headerSub: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  mapArea: {
-    flex: 1,
-    backgroundColor: '#E8F0E6', // Beautiful pasture green map landscape
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  park: {
-    position: 'absolute',
-    backgroundColor: '#CDE0C4',
-    borderRadius: 16,
-    padding: 10,
-    justifyContent: 'flex-end',
-    borderWidth: 1.5,
-    borderColor: '#BDD8B2',
-  },
-  parkLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#557A46',
-  },
-  river: {
-    position: 'absolute',
-    top: 220,
-    left: -50,
-    width: '130%',
-    height: 35,
-    backgroundColor: '#D0E1F9',
-    transform: [{ rotate: '-12deg' }],
-  },
-  riverLabelContainer: {
-    position: 'absolute',
-  },
-  riverLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#4B709C',
-    letterSpacing: 1.5,
-  },
-  street: {
-    position: 'absolute',
-    backgroundColor: '#FFFDF9',
-    borderRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-  },
-  streetLabel: {
-    position: 'absolute',
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#8C857B',
-  },
-  streetLabelVertical: {
-    position: 'absolute',
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#8C857B',
-    transform: [{ rotate: '90deg' }],
-  },
-  pin: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#FF2424',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 5,
-    borderWidth: 2,
-    borderColor: '#FF2424',
-  },
-  pinActive: {
-    backgroundColor: '#FF2424',
-    borderColor: '#FF2424',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    transform: [{ scale: 1.15 }],
-  },
-  myLocation: {
-    position: 'absolute',
-    left: 173,
-    top: 243,
-    width: 20,
-    height: 20,
-    zIndex: 5,
-  },
-  myLocationDot: {
-    position: 'absolute',
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#3B82F6',
-    borderWidth: 2,
-    borderColor: '#fff',
-    top: 4,
-    left: 4,
-  },
-  myLocationRing: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(59,130,246,0.22)',
-    top: -6,
-    left: -6,
-  },
-  mapLabel: {
-    position: 'absolute',
-    bottom: 12,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mapLabelText: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '600',
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: '#111827' },
+  headerSub: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  map: { flex: 1 },
+  crosshair: { position: 'absolute', top: '50%', left: '50%', marginTop: -18, marginLeft: -18, zIndex: 10 },
+  fab: {
+    position: 'absolute', right: 18, zIndex: 20,
+    width: 48, height: 48, borderRadius: 24, backgroundColor: '#fff',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 8, elevation: 5,
   },
   bottomSheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 15,
+    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
+    backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 15,
   },
-  sheetTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 14,
+  addressCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#F9FAFB', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F3F4F6', marginBottom: 14,
   },
-  pinPreviews: {
-    flexDirection: 'row',
-    marginBottom: 4,
+  addressIconWrap: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center',
   },
-  previewCard: {
-    width: 110,
-    marginRight: 14,
+  addressTextWrap: { flex: 1 },
+  addressLabel: { fontSize: 11, fontWeight: '600', color: '#9CA3AF', marginBottom: 2 },
+  addressText: { fontSize: 14, fontWeight: '600', color: '#111827', lineHeight: 19 },
+  confirmBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#FF2424', borderRadius: 14, paddingVertical: 16, marginBottom: 10,
   },
-  previewImg: {
-    width: 110,
-    height: 80,
-    borderRadius: 14,
-    resizeMode: 'cover',
-  },
-  previewTitle: {
-    fontSize: 12,
-    color: '#111827',
-    fontWeight: '700',
-    marginTop: 6,
-  },
-  previewDistance: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginTop: 1,
-  },
-  selectedCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#F3F4F6',
-  },
-  selectedImg: {
-    width: 70,
-    height: 70,
-    borderRadius: 12,
-    resizeMode: 'cover',
-  },
-  selectedInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  freeBadge: {
-    backgroundColor: '#ECFDF5',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  freeBadgeText: {
-    color: '#10B981',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  selectedDistance: {
-    fontSize: 11,
-    color: '#10B981',
-    fontWeight: '700',
-  },
-  selectedTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  selectedMeta: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
+  confirmBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  changeLink: { alignItems: 'center', paddingVertical: 6 },
+  changeLinkText: { color: '#6B7280', fontSize: 13, fontWeight: '600' },
 });
-

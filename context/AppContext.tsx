@@ -25,6 +25,7 @@ interface AppContextType {
   signUp: (userData: any) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   refreshData: () => Promise<void>;
+  updateLocation: (latitude: number, longitude: number, neighborhood?: string) => Promise<{ success: boolean; error?: string }>;
   createListing: (params: {
     title: string;
     description: string;
@@ -187,6 +188,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return conv;
   };
 
+  const handleUpdateLocation = async (latitude: number, longitude: number, neighborhood?: string) => {
+    try {
+      if (await api.isAuthenticated()) {
+        try {
+          const result = await api.updateLocation({ latitude, longitude, neighborhood });
+          setCurrentUser(result.user);
+          await AsyncStorage.setItem('@pickit_current_user', JSON.stringify(result.user));
+          return { success: true };
+        } catch {
+          // API failed — fall back to local update
+        }
+      }
+      const updated = await db.updateLocation(latitude, longitude, neighborhood || '');
+      if (updated) {
+        setCurrentUser(updated);
+        return { success: true };
+      }
+      return { success: false, error: 'No user logged in' };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to update location' };
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -208,6 +232,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getMessages,
         sendMessage,
         getOrCreateConversation,
+        updateLocation: handleUpdateLocation,
       }}
     >
       {children}

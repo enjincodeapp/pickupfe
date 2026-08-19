@@ -210,6 +210,22 @@ class ApiService {
       method: 'POST',
     });
   }
+
+  // ─── User Profile Endpoints ─────────────────────────────────
+
+  /**
+   * Update the authenticated user's location.
+   */
+  async updateLocation(params: {
+    latitude: number;
+    longitude: number;
+    neighborhood?: string;
+  }): Promise<{ message: string; user: any }> {
+    return await this.request('/user/location', {
+      method: 'PATCH',
+      body: JSON.stringify(params),
+    });
+  }
 }
 
 export const api = new ApiService();

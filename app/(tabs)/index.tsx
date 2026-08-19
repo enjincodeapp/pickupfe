@@ -15,10 +15,27 @@ import { useApp } from '../../context/AppContext';
 import { useSubscription } from '../../context/SubscriptionContext';
 
 export default function HomeScreen() {
-  const { listings, categories, isFavorite, toggleFavorite, getImagesForListing } = useApp();
+  const { listings, categories, isFavorite, toggleFavorite, getImagesForListing, currentUser } = useApp();
   const { isPremium, showPaywall } = useSubscription();
   const [activeCategory, setActiveCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const frostedFreckles = Array.from({ length: 190 }, (_, index) => ({
+    id: index,
+    left: `${(index * 11.7) % 100}%`,
+    top: `${(index * 17.3) % 100}%`,
+    size: index % 5 === 0 ? 8 : index % 3 === 0 ? 6 : 4,
+    opacity: index % 4 === 0 ? 0.26 : 0.16,
+  }));
+  const logoWatermarks = Array.from({ length: 100 }, (_, index) => ({
+    id: index,
+    left: `${(index * 11.1 + 7) % 88}%`,
+    top: `${(index * 13.7 + 9) % 82}%`,
+    scale: 0.18 + ((index % 5) * 0.06),
+  }));
+
+  const userNeighborhood = currentUser?.neighborhood || ' ';
+  const firstName = currentUser?.name?.trim().split(/\s+/)[0] || 'there';
 
   const filteredListings = listings.filter((item) => {
     const matchesCategory =
@@ -53,14 +70,26 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <Image source={require('../../assets/images/logo.png')} style={styles.logo} resizeMode="contain" />
+          
+          <View style={styles.headerLeft}>
+            <Image
+              source={require('../../assets/images/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.greeting}>Hi, {currentUser?.name?.split(' ')[0] || 'User'}!</Text>
+          </View>
+
           <TouchableOpacity style={styles.mapBtn} onPress={() => router.push('/map-view')}>
             <Ionicons name="map-outline" size={20} color="#111827" />
           </TouchableOpacity>
         </View>
         <View style={styles.locationRow}>
           <Ionicons name="location" size={15} color="#FF2424" />
-          <Text style={styles.locationText}>Paddington, W2 · <Text style={styles.locationLink}>Change</Text></Text>
+          <Text style={styles.locationText}>{userNeighborhood} · </Text>
+          <TouchableOpacity onPress={() => router.push('/map-view')}>
+            <Text style={styles.locationLink}>Change location</Text>
+          </TouchableOpacity>
         </View>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color="#9CA3AF" />
@@ -97,7 +126,7 @@ export default function HomeScreen() {
 
         {filteredListings.length === 0 ? (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyEmoji}>🎁</Text>
+            {/* <Text style={styles.emptyEmoji}>🎁</Text> */}
             <Text style={styles.emptyTitle}>No items found</Text>
             <Text style={styles.emptySub}>Be the first to list a free item for your community!</Text>
             <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/post-item')}>
@@ -112,7 +141,13 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={item.id}
                   style={styles.card}
-                  onPress={() => router.push({ pathname: '/item-detail', params: { id: item.id, title: item.title } })}
+                  onPress={() => {
+                    if (!isPremium) {
+                      showPaywall();
+                      return;
+                    }
+                    router.push({ pathname: '/item-detail', params: { id: item.id, title: item.title } });
+                  }}
                   activeOpacity={0.9}
                 >
                   <View style={styles.thumb}>
@@ -120,13 +155,44 @@ export default function HomeScreen() {
                     {!isPremium && (
                       <TouchableOpacity
                         style={StyleSheet.absoluteFill}
-                        activeOpacity={0.85}
+                        activeOpacity={0.95}
                         onPress={showPaywall}
                       >
-                        <BlurView intensity={35} tint="light" style={styles.thumbBlur}>
+                        <BlurView intensity={100} tint="dark" style={styles.thumbBlur}>
+                          <View style={styles.frostedOverlay}>
+                            {frostedFreckles.map((dot) => (
+                              <View
+                                key={dot.id}
+                                style={[
+                                  styles.freckle,
+                                  {
+                                    left: dot.left,
+                                    top: dot.top,
+                                    width: dot.size,
+                                    height: dot.size,
+                                    opacity: dot.opacity,
+                                  },
+                                ]}
+                              />
+                            ))}
+                            {logoWatermarks.map((logo) => (
+                              <Image
+                                key={logo.id}
+                                source={require('../../assets/images/logo.png')}
+                                style={[
+                                  styles.logoWatermark,
+                                  {
+                                    left: logo.left,
+                                    top: logo.top,
+                                    transform: [{ scale: logo.scale }],
+                                  },
+                                ]}
+                                resizeMode="contain"
+                              />
+                            ))}
+                          </View>
                           <View style={styles.thumbLockPill}>
                             <Ionicons name="lock-closed" size={12} color="#fff" />
-                            <Text style={styles.thumbLockText}>Premium</Text>
                           </View>
                         </BlurView>
                       </TouchableOpacity>
@@ -137,23 +203,30 @@ export default function HomeScreen() {
                       </View>
                       <TouchableOpacity
                         style={styles.heartBtn}
-                        onPress={() => toggleFavorite(item.id)}
+                        onPress={(event: any) => {
+                          event?.stopPropagation?.();
+                          if (!isPremium) {
+                            showPaywall();
+                            return;
+                          }
+                          toggleFavorite(item.id);
+                        }}
                       >
                         <Ionicons
                           name={fav ? 'heart' : 'heart-outline'}
                           size={15}
-                          color={fav ? '#FF2424' : '#111827'}
+                          color={isPremium ? (fav ? '#FF2424' : '#111827') : '#9CA3AF'}
                         />
                       </TouchableOpacity>
                     </View>
-                    <View style={styles.conditionBadge}>
-                      <Text style={styles.conditionBadgeText}>Condition: {item.condition}</Text>
+                  </View>
+
+                  {isPremium && (
+                    <View style={styles.details}>
+                      <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                      <Text style={styles.itemMeta}>0.4 mi · {userNeighborhood.split(',')[0]}</Text>
                     </View>
-                  </View>
-                  <View style={styles.details}>
-                    <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
-                    <Text style={styles.itemMeta}>0.4 mi · Paddington</Text>
-                  </View>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -168,7 +241,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB' },
   header: { backgroundColor: '#fff', paddingTop: 54, paddingHorizontal: 18, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  logo: { width: 100, height: 36 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  logo: { width: 26, height: 36 },
+  greeting: { fontSize: 18, fontWeight: '700', color: '#111827' },
   mapBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 10 },
   locationText: { fontSize: 13, color: '#4B5563' },
@@ -194,6 +269,23 @@ const styles = StyleSheet.create({
   thumbLockPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(17,24,39,0.55)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5 },
   thumbLockText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   thumbTop: { position: 'absolute', top: 8, left: 8, right: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  frostedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(19, 20, 22, 0.72)',
+  },
+  freckle: {
+    position: 'absolute',
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.32)',
+    transform: [{ scale: 1.35 }],
+  },
+  logoWatermark: {
+    position: 'absolute',
+    width: 56,
+    height: 22,
+    opacity: 0.14,
+    tintColor: '#ffffff',
+  },
   freeBadge: { backgroundColor: '#ECFDF5', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
   freeBadgeText: { color: '#10B981', fontSize: 10, fontWeight: '700' },
   heartBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' },
